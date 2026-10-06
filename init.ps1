@@ -116,7 +116,8 @@ foreach ($dir in 'WindowsPowerShell', 'PowerShell') {
 }
 # プロファイルを読めるようにする (既定の Restricted だとスクリプトを実行できない)
 if ((Get-ExecutionPolicy -Scope CurrentUser) -in 'Undefined', 'Restricted') {
-    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force
+    # より優先されるスコープ (Process / グループポリシー) に設定があると、変更できても警告のエラーになる
+    try { Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force } catch { Write-Warning $_ }
 }
 
 # フォント (FiraCode Nerd Font)。ユーザー単位で入れるので管理者権限は要らない
