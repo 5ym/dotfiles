@@ -4,50 +4,32 @@ Windows (PowerShell) の開発環境。Linux 環境が必要な作業は wslc �
 
 ## init
 
-先に Smart App Control をオフにする(Windows セキュリティ → アプリとブラウザーの制御 → スマート アプリ コントロールの設定)。署名のない CLI (fj など) が起動できなくなるため。一度オフにすると OS を初期化しないとオンに戻せない。
-
-PowerShell で実行する。
+先に Smart App Control をオフにしておく (署名のない fj などが起動できないため。一度オフにすると OS を初期化しないと戻せない)。
 
 ```powershell
 winget install --id GitHub.cli --exact --source winget
-# 新しいターミナルを開いてから
+# 新しいターミナルで
 gh auth login
 gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.raw' | Out-String | Invoke-Expression
 ```
 
-`init.ps1` がやること(何度実行してもよい):
+`init.ps1` は何度実行してもよい。やること:
 
-- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code / Infisical CLI を入れる
-- fj (forgejo-cli) を Codeberg のリリースから `%LOCALAPPDATA%\Programs\fj` に入れて PATH に追加(sha256 を照合)
-- このリポジトリを `~/dotfiles` に clone し、`gh auth setup-git`
-- `~/.gitconfig` から `~/dotfiles/.gitconfig` を include
-- `~/.ssh/config` の先頭に `Include ~/dotfiles/.ssh/config`
-- Infisical (https://il.doany.io、`/dotfiles` の prod) からシークレットを取り出し、`~/.ssh/main.pem` と `~/.git-credentials` に本人だけ読める権限で書き出す(未ログインならログインを求める)
-- FiraCode Nerd Font を入れ、Windows Terminal に `terminal/settings.json` の項目を上書きする
-- Windows PowerShell 5.1 と PowerShell 7 の `$PROFILE` から `powershell/profile.ps1` を読む(元のファイルは `.bak` に残す)
-- 実行ポリシーが Restricted なら CurrentUser を RemoteSigned にする
-- Dev Drive がなければ、UAC を出して `devdrive.ps1` で作る(`C:\DevDrive\DevDrive.vhdx`、50GB の可変サイズ、空いているドライブ文字を D から)。起動時に attach し直すタスク「Mount DevDrive」も登録する。clone 先は `<ドライブ>:\<org>\<repo>`
+- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code / Infisical CLI、Codeberg から fj (forgejo-cli) を入れる
+- `~/dotfiles` に clone し、`~/.gitconfig` と `~/.ssh/config` からこのリポジトリの設定を読む
+- Infisical (https://il.doany.io の `/dotfiles`、prod) の `SSH_MAIN_PEM` と `GIT_CREDENTIALS` を `~/.ssh/main.pem` と `~/.git-credentials` に書き出す
+- PowerShell 5.1 / 7 のプロファイル、FiraCode Nerd Font、Windows Terminal (`terminal/settings.json` の項目だけ上書き)
+- Dev Drive がなければ UAC を出して作る (`devdrive.ps1`、50GB。clone 先は `<ドライブ>:\<org>\<repo>`)
 
-## GitHub 以外の Git サーバー
+上書きするプロファイルと Terminal の設定は `.bak` に残す。
 
-`.gitconfig` で `fj.doany.io`(Forgejo)と `code.ffmpeg.org` の認証を `~/.git-credentials` から読む。中身は Infisical の `/dotfiles/GIT_CREDENTIALS` に 1 行ずつ置く。トークンを作り直したら Infisical の値を差し替え、各端末で `init.ps1` を実行し直す。
+## シークレット
 
-```
-https://<ユーザー>:<トークン>@fj.doany.io
-```
+リポジトリには置かず、Infisical の `/dotfiles` に置く。作り直したら Infisical の値を差し替えて、各端末で `init.ps1` を実行し直す。
+`GIT_CREDENTIALS` は GitHub 以外の Git サーバー (fj.doany.io、code.ffmpeg.org) 用で、`https://<ユーザー>:<トークン>@<ホスト>` を 1 行ずつ書く。
 
-SSH 鍵も同じく Infisical の `/dotfiles/SSH_MAIN_PEM`。リポジトリにはシークレットを置かない(`.gitignore` 済み)。
+fj は端末ごとに `fj -H fj.doany.io auth add-key <ユーザー> <トークン>` でログインする。
 
-Forgejo のトークンは 設定 → アプリケーション で作る(push だけなら `write:repository`)。
+## 更新
 
-## fj (forgejo-cli)
-
-端末ごとに一度ログインする。
-
-```powershell
-fj -H fj.doany.io auth add-key <ユーザー> <トークン>
-```
-
-fj を更新するときは `init.ps1` の `$fjVersion` と `$fjSha256`(リリースの zip の sha256。配布元はチェックサムを出していない)を書き換えて `init.ps1` を実行し直す。
-
-改行は `.gitattributes` で LF に固定している。
+fj とフォントのバージョンは `init.ps1` に URL と sha256 で書いてある (配布元がチェックサムを出していないので、ダウンロードした zip から計算する)。

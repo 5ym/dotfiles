@@ -1,4 +1,2 @@
-# Windows の core.autocrlf=true でも CRLF にしない。
-# .git-credentials や鍵に \r が混ざると認証が壊れる
+# Windows の core.autocrlf=true でも CRLF にしない
 * text=auto eol=lf
-*.pem -text
