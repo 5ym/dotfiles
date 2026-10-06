@@ -1,0 +1,21 @@
+[user]
+        email = info@doany.io
+        name = Ruk Doe
+[pull]
+	rebase = false
+[push]
+	autoSetupRemote = true
+[http]
+        postBuffer = 524288000
+[init]
+        defaultBranch = main
+[core]
+        # Windows: パス長 260 文字制限を外す / コミット時に CRLF を LF にする
+        longpaths = true
+        autocrlf = input
+# GitHub 以外の Git サーバーの認証。トークンは Infisical の /dotfiles/GIT_CREDENTIALS に
+# 「https://<ユーザー>:<トークン>@<ホスト>」を 1 行ずつ置き、init.ps1 が ~/.git-credentials に書き出す
+[credential "https://fj.doany.io"]
+        helper = store --file ~/.git-credentials
+[credential "https://code.ffmpeg.org"]
+        helper = store --file ~/.git-credentials

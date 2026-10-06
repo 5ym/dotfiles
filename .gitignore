@@ -1,0 +1,4 @@
+# シークレットは Infisical に置く (init.ps1 が ~/.ssh/main.pem と ~/.git-credentials に書き出す)
+.ssh/main.pem
+.git-credentials
+*.pem
