@@ -31,12 +31,14 @@ New-Partition -DiskNumber $disk.Number -UseMaximumSize -DriveLetter $letter | Ou
 cmd /c "echo Y| format ${letter}: /DevDrv /Q /V:DevDrive" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "format が失敗した ($LASTEXITCODE)" }
 
-# 接続した VHDX は再起動で外れるので、起動時に attach し直す
+# 接続した VHDX は再起動で外れるので、起動時に attach し直す。
+# タスクの既定は「バッテリー駆動中は起動しない」なので、ノート PC だと電源を挿さずに起動したとき外れたままになる
 $attach = Join-Path (Split-Path $VhdPath) 'attach.txt'
 "select vdisk file=`"$VhdPath`"`r`nattach vdisk" | Out-File $attach -Encoding ascii
 Register-ScheduledTask -TaskName $TaskName -Force `
     -Action (New-ScheduledTaskAction -Execute 'diskpart.exe' -Argument "/s `"$attach`"") `
     -Trigger (New-ScheduledTaskTrigger -AtStartup) `
+    -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries) `
     -Principal (New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest) | Out-Null
 
 fsutil devdrv query "${letter}:"
