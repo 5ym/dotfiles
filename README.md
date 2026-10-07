@@ -10,6 +10,8 @@ Windows (PowerShell) の開発環境。Linux 環境が必要な作業は wslc �
 winget install --id GitHub.cli --exact --source winget
 # 新しいターミナルで
 gh auth login
+# 5.1 は gh の出力 (UTF-8) を CP932 として読み、日本語のコメントが化けて構文エラーになる
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.raw' | Out-String | Invoke-Expression
 ```
 
