@@ -3,12 +3,38 @@
     "theme": "light",
     "profiles": {
         "defaults": {
-            "colorScheme": "One Half Light",
+            "colorScheme": "GitHub Light Default",
             "font": {
                 "face": "FiraCode Nerd Font Mono"
             },
-            "opacity": 80,
-            "useAcrylic": true
+            "opacity": 100,
+            "useAcrylic": false,
+            "adjustIndistinguishableColors": "always"
         }
-    }
+    },
+    "schemes": [
+        {
+            "name": "GitHub Light Default",
+            "foreground": "#1F2328",
+            "background": "#FFFFFF",
+            "cursorColor": "#0969DA",
+            "selectionBackground": "#0969DA",
+            "black": "#24292F",
+            "red": "#CF222E",
+            "green": "#116329",
+            "yellow": "#4D2D00",
+            "blue": "#0969DA",
+            "purple": "#8250DF",
+            "cyan": "#1B7C83",
+            "white": "#6E7781",
+            "brightBlack": "#57606A",
+            "brightRed": "#A40E26",
+            "brightGreen": "#1A7F37",
+            "brightYellow": "#633C01",
+            "brightBlue": "#218BFF",
+            "brightPurple": "#A475F9",
+            "brightCyan": "#3192AA",
+            "brightWhite": "#8C959F"
+        }
+    ]
 }

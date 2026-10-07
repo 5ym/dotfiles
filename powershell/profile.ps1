@@ -14,3 +14,14 @@ if ($starship) {
     }
     . $cache
 }
+
+# PSReadLine の予測候補は既定だと明るい白を薄く (97;2) 出すので、ライトテーマでは見えない。
+# GitHub Light の muted (#6E7781) にする。リストの選択行も既定は暗い背景 (256 色の 238) なので明るい青にする。
+# Windows PowerShell 5.1 同梱の PSReadLine 2.0 には予測の色がないので除外。
+if ((Get-Module PSReadLine).Version -ge [version]'2.1') {
+    $esc = [char]27
+    Set-PSReadLineOption -Colors @{
+        InlinePrediction       = "$esc[38;2;110;119;129m"
+        ListPredictionSelected = "$esc[48;2;221;244;255m"
+    }
+}
