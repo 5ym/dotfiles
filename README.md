@@ -15,7 +15,7 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 
 `init.ps1` は何度実行してもよい。やること:
 
-- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code、Codeberg から fj (forgejo-cli) を入れる
+- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code / [wslc-compose](https://github.com/danything/wslc-compose)、Codeberg から fj (forgejo-cli) を入れる
 - `~/dotfiles` に clone し、`~/.gitconfig` と `~/.ssh/config` からこのリポジトリの設定を読む
 - Dev Drive がなければ UAC を出して作る (`devdrive.ps1`、50GB。clone 先は `<ドライブ>:\<org>\<repo>`)
 - [danything/gitops](https://github.com/danything/gitops) を `<Dev Drive>:\danything\gitops` に clone する。

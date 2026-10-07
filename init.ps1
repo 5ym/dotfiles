@@ -22,7 +22,7 @@ function Expand-VerifiedZip($url, $sha256) {
 }
 
 # パッケージ
-foreach ($id in 'Git.Git', 'GitHub.cli', 'Microsoft.PowerShell', 'Starship.Starship', 'Microsoft.VisualStudioCode') {
+foreach ($id in 'Git.Git', 'GitHub.cli', 'Microsoft.PowerShell', 'Starship.Starship', 'Microsoft.VisualStudioCode', 'danything.wslc-compose') {
     winget list --id $id --exact --accept-source-agreements | Out-Null
     if ($LASTEXITCODE -ne 0) {
         winget install --id $id --exact --source winget --silent --accept-package-agreements --accept-source-agreements
