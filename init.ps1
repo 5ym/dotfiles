@@ -22,7 +22,7 @@ function Expand-VerifiedZip($url, $sha256) {
 }
 
 # パッケージ
-foreach ($id in 'Git.Git', 'GitHub.cli', 'Microsoft.PowerShell', 'Starship.Starship', 'Microsoft.VisualStudioCode', 'infisical.infisical') {
+foreach ($id in 'Git.Git', 'GitHub.cli', 'Microsoft.PowerShell', 'Starship.Starship', 'Microsoft.VisualStudioCode') {
     winget list --id $id --exact --accept-source-agreements | Out-Null
     if ($LASTEXITCODE -ne 0) {
         winget install --id $id --exact --source winget --silent --accept-package-agreements --accept-source-agreements
@@ -58,13 +58,41 @@ New-Item -ItemType Directory -Force $sshDir | Out-Null
 $rest = if (Test-Path $sshConfig) { @(Get-Content $sshConfig) } else { @() }
 if ($rest -notcontains $include) { @($include) + $rest | Set-Content $sshConfig -Encoding ascii }
 
-# シークレットは Infisical から取り出してファイルに書き出す (普段の git / ssh は Infisical なしで動く)
-$infisical = '--domain', 'https://il.doany.io/api', '--projectId', 'b3ee533f-5b9e-4fdf-8c44-109926b78f20', '--env', 'prod', '--path', '/dotfiles', '--silent'
-$exported = infisical export @infisical --format json 2>$null
-if ($LASTEXITCODE -ne 0) {
-    infisical login --domain https://il.doany.io/api
-    $exported = infisical export @infisical --format json
-    if ($LASTEXITCODE -ne 0) { throw 'infisical: シークレットを取得できない' }
+# Dev Drive。作成には管理者権限が要るので、ないときだけ UAC を出す。
+# 5.1 は BOM なし UTF-8 のスクリプトを Shift_JIS として読むので pwsh で実行する
+$pwsh = (Get-Command pwsh).Source
+if (-not (Test-Path 'C:\DevDrive\DevDrive.vhdx')) {
+    $p = Start-Process $pwsh -Verb RunAs -Wait -PassThru `
+        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$dotfiles\devdrive.ps1`""
+    if ($p.ExitCode -ne 0) { throw "devdrive.ps1 が失敗した ($($p.ExitCode))" }
+}
+$dev = (Get-Volume -FileSystemLabel DevDrive).DriveLetter
+
+# danything/gitops。infisical などの運用のコマンドは、手元に入れずに gitops の tools (wslc のコンテナ) で動かす
+$gitops = "${dev}:\danything\gitops"
+if (-not (Test-Path "$gitops\.git")) { gh repo clone danything/gitops $gitops }
+$tools = "-NoProfile -ExecutionPolicy Bypass -File `"$gitops\tools\t.ps1`""
+
+# シークレットは Infisical から取り出してファイルに書き出す (普段の git / ssh は Infisical なしで動く)。
+# 未ログインだと export がログインの入力を待つので、標準入力を閉じてすぐ失敗させる (出力はメモリで受け取る)
+function Export-Secrets {
+    $psi = New-Object Diagnostics.ProcessStartInfo $pwsh, ("$tools infisical export --domain https://il.doany.io/api " +
+        '--projectId b3ee533f-5b9e-4fdf-8c44-109926b78f20 --env prod --path /dotfiles --silent --format json')
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $p = [Diagnostics.Process]::Start($psi)
+    $p.StandardInput.Close()
+    $out = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    if ($p.ExitCode -eq 0) { $out }
+}
+$exported = Export-Secrets
+if (-not $exported) {
+    # ブラウザのログインはコンテナに戻ってこられないので、ブラウザに出るトークンを貼り付ける
+    & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" infisical login --domain https://il.doany.io/api
+    $exported = Export-Secrets
+    if (-not $exported) { throw 'infisical: シークレットを取得できない' }
 }
 $secrets = @{}
 foreach ($s in ($exported | Out-String | ConvertFrom-Json)) { $secrets[$s.key] = $s.value }
@@ -126,14 +154,6 @@ if (Test-Path $wt) {
     Copy-Item $wt "$wt.bak" -Force
     # WriteAllText は BOM なし UTF-8 (5.1 の Set-Content -Encoding utf8 は BOM を付ける)
     [IO.File]::WriteAllText($wt, ($settings | ConvertTo-Json -Depth 32))
-}
-
-# Dev Drive。作成には管理者権限が要るので、ないときだけ UAC を出す。
-# 5.1 は BOM なし UTF-8 のスクリプトを Shift_JIS として読むので pwsh で実行する
-if (-not (Test-Path 'C:\DevDrive\DevDrive.vhdx')) {
-    $p = Start-Process (Get-Command pwsh).Source -Verb RunAs -Wait -PassThru `
-        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$dotfiles\devdrive.ps1`""
-    if ($p.ExitCode -ne 0) { throw "devdrive.ps1 が失敗した ($($p.ExitCode))" }
 }
 
 Write-Host 'done. 新しいターミナルを開くと反映される'

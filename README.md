@@ -15,11 +15,14 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 
 `init.ps1` は何度実行してもよい。やること:
 
-- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code / Infisical CLI、Codeberg から fj (forgejo-cli) を入れる
+- winget で Git / GitHub CLI / PowerShell 7 / Starship / VS Code、Codeberg から fj (forgejo-cli) を入れる
 - `~/dotfiles` に clone し、`~/.gitconfig` と `~/.ssh/config` からこのリポジトリの設定を読む
-- Infisical (https://il.doany.io の `/dotfiles`、prod) の `SSH_MAIN_PEM` と `GIT_CREDENTIALS` を `~/.ssh/main.pem` と `~/.git-credentials` に書き出す
-- PowerShell 5.1 / 7 のプロファイル、FiraCode Nerd Font、Windows Terminal (`terminal/settings.json` の項目だけ上書き)
 - Dev Drive がなければ UAC を出して作る (`devdrive.ps1`、50GB。clone 先は `<ドライブ>:\<org>\<repo>`)
+- [danything/gitops](https://github.com/danything/gitops) を `<Dev Drive>:\danything\gitops` に clone する。
+  infisical などの運用のコマンドは手元に入れず、その `tools/t.ps1` (wslc のコンテナ) で動かす
+- Infisical (https://il.doany.io の `/dotfiles`、prod) の `SSH_MAIN_PEM` と `GIT_CREDENTIALS` を `~/.ssh/main.pem` と `~/.git-credentials` に書き出す。
+  未ログインならブラウザでログインする (ログイン情報は gitops の `.home/`)
+- PowerShell 5.1 / 7 のプロファイル、FiraCode Nerd Font、Windows Terminal (`terminal/settings.json` の項目だけ上書き)
 
 上書きするプロファイルと Terminal の設定は `.bak` に残す。
 
@@ -29,6 +32,9 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 `GIT_CREDENTIALS` は GitHub 以外の Git サーバー (fj.doany.io、code.ffmpeg.org) 用で、`https://<ユーザー>:<トークン>@<ホスト>` を 1 行ずつ書く。
 
 fj は端末ごとに `fj -H fj.doany.io auth add-key <ユーザー> <トークン>` でログインする。
+
+NetBird の exit ノードを使っていると、`*.doany.io` を外向きの IPv4 で引いたときに折り返しになって届かないので、
+NetBird の DNS ゾーンで `*.doany.io` (と `*.s.doany.io`) を内部の 10.0.0.2 に向けている (`nb.doany.io` だけは例外で外向きのまま)。
 
 ## 更新
 
