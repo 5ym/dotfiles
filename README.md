@@ -33,7 +33,9 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 リポジトリには置かず、Infisical の `/dotfiles` に置く。作り直したら Infisical の値を差し替えて、各端末で `init.ps1` を実行し直す。
 `GIT_CREDENTIALS` は GitHub 以外の Git サーバー (fj.doany.io、code.ffmpeg.org) 用で、`https://<ユーザー>:<トークン>@<ホスト>` を 1 行ずつ書く。
 
-fj は端末ごとに `fj -H fj.doany.io auth add-key <ユーザー> <トークン>` でログインする。
+fj (forgejo-cli) も `GIT_CREDENTIALS` の fj.doany.io のトークンで `init.ps1` がログインする
+(`fj auth login` は Codeberg など fj に組み込まれたインスタンスにしか使えない)。
+組織の Actions のシークレットを書くなど、fj で使う権限はそのトークンに付けておく。
 
 NetBird の exit ノードを使っていると、`*.doany.io` を外向きの IPv4 で引いたときに折り返しになって届かないので、
 NetBird の DNS ゾーンで `*.doany.io` (と `*.s.doany.io`) を内部の 10.0.0.2 に向けている (`nb.doany.io` だけは例外で外向きのまま)。

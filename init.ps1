@@ -103,7 +103,17 @@ foreach ($e in @{ SSH_MAIN_PEM = "$sshDir\main.pem"; GIT_CREDENTIALS = "$HOME\.g
     # 本人だけ読める (chmod 600 相当)。Windows の OpenSSH はこうしないと鍵を拒否する
     icacls $e.Value /inheritance:r /grant:r "${env:USERNAME}:(R,W)" | Out-Null
 }
-Remove-Variable exported, secrets
+# fj (forgejo-cli) も GIT_CREDENTIALS の fj.doany.io のトークンでログインする (fj の auth login は自前の
+# インスタンスでは使えない)。トークンは標準入力で渡す (引数だとプロセス一覧に出る)。
+# 登録済みなら何もしない (whoami は read:user の権限が要るので、fj の keys.json で見る)
+$fjLine = ($secrets['GIT_CREDENTIALS'] -split "`r?`n") | Where-Object { $_ -match '^https://[^:/]+:[^@]+@fj\.doany\.io/?$' } | Select-Object -First 1
+$fjKeys = Join-Path $env:APPDATA 'forgejo-cli\forgejo-cli\data\keys.json'
+$fjHasKey = (Test-Path $fjKeys) -and (Get-Content $fjKeys -Raw | ConvertFrom-Json).hosts.'fj.doany.io'
+if ($fjLine -and -not $fjHasKey) {
+    [Uri]::UnescapeDataString(([Uri]$fjLine).UserInfo.Split(':', 2)[1]) | & "$fjDir\fj.exe" -H fj.doany.io auth add-token | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning 'fj: fj.doany.io のトークンを登録できなかった' }
+}
+Remove-Variable exported, secrets, fjLine, fjHasKey
 
 # PowerShell プロファイル。5.1 と 7 の両方から dotfiles のものを読む
 $loader = '. (Join-Path $HOME ''dotfiles\powershell\profile.ps1'')'
