@@ -19,11 +19,11 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 
 - winget で Git / GitHub CLI / jq / PowerShell 7 / Starship / VS Code / [wslc-compose](https://github.com/danything/wslc-compose)、Codeberg から fj (forgejo-cli) を入れる。
   jq は gitops の tools のコンテナに入れず手元に置く (コンテナを起こすほどではなく、パイプの先で使うことが多いため)
-- `~/dotfiles` に clone し、`~/.gitconfig` と `~/.ssh/config` からこのリポジトリの設定を読む
+- `~/dotfiles` に clone し、`~/.gitconfig` からこのリポジトリの設定を読む
 - Dev Drive がなければ UAC を出して作る (`devdrive.ps1`、50GB。clone 先は `<ドライブ>:\<org>\<repo>`)
 - [danything/gitops](https://github.com/danything/gitops) を `<Dev Drive>:\danything\gitops` に clone する。
   infisical などの運用のコマンドは手元に入れず、その `tools/t.ps1` (wslc のコンテナ) で動かす
-- Infisical (https://il.doany.io の `/dotfiles`、prod) の `SSH_MAIN_PEM` と `GIT_CREDENTIALS` を `~/.ssh/main.pem` と `~/.git-credentials` に書き出す。
+- Infisical (https://il.doany.io の `/dotfiles`、prod) の `GIT_CREDENTIALS` を `~/.git-credentials` に書き出す。
   未ログインならブラウザでログインする (ログイン情報は gitops の `.home/`)
 - PowerShell 5.1 / 7 のプロファイル、FiraCode Nerd Font、Windows Terminal (`terminal/settings.json` の項目だけ上書き)
 
