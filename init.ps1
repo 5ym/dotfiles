@@ -54,7 +54,8 @@ git config --global include.path '~/dotfiles/.gitconfig'
 $sshConfig = Join-Path $HOME '.ssh\config'
 $include = 'Include ~/dotfiles/.ssh/config'
 if ((Test-Path $sshConfig) -and @(Get-Content $sshConfig) -contains $include) {
-    @(Get-Content $sshConfig) | Where-Object { $_ -ne $include } | Set-Content $sshConfig -Encoding ascii
+    # 残りが空でも書き出す (パイプに何も流れないと Set-Content はファイルに触らない)
+    Set-Content $sshConfig -Value @(@(Get-Content $sshConfig) | Where-Object { $_ -ne $include }) -Encoding ascii
 }
 
 # Dev Drive。作成には管理者権限が要るので、ないときだけ UAC を出す。
