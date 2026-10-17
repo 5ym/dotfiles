@@ -50,13 +50,12 @@ if (-not (Test-Path "$dotfiles\.git")) { gh repo clone 5ym/dotfiles $dotfiles }
 gh auth setup-git
 git config --global include.path '~/dotfiles/.gitconfig'
 
-# SSH。Include は先頭にないと効かない
-$sshDir = Join-Path $HOME '.ssh'
-$sshConfig = Join-Path $sshDir 'config'
+# SSH の設定はもう配らない (クラスタが Talos になり、ssh で入るノードが無い)。前に足した Include だけ外す
+$sshConfig = Join-Path $HOME '.ssh\config'
 $include = 'Include ~/dotfiles/.ssh/config'
-New-Item -ItemType Directory -Force $sshDir | Out-Null
-$rest = if (Test-Path $sshConfig) { @(Get-Content $sshConfig) } else { @() }
-if ($rest -notcontains $include) { @($include) + $rest | Set-Content $sshConfig -Encoding ascii }
+if ((Test-Path $sshConfig) -and @(Get-Content $sshConfig) -contains $include) {
+    @(Get-Content $sshConfig) | Where-Object { $_ -ne $include } | Set-Content $sshConfig -Encoding ascii
+}
 
 # Dev Drive。作成には管理者権限が要るので、ないときだけ UAC を出す。
 # 5.1 は BOM なし UTF-8 のスクリプトを Shift_JIS として読むので pwsh で実行する
@@ -73,7 +72,7 @@ $gitops = "${dev}:\danything\gitops"
 if (-not (Test-Path "$gitops\.git")) { gh repo clone danything/gitops $gitops }
 $tools = "-NoProfile -ExecutionPolicy Bypass -File `"$gitops\tools\t.ps1`""
 
-# シークレットは Infisical から取り出してファイルに書き出す (普段の git / ssh は Infisical なしで動く)。
+# シークレットは Infisical から取り出してファイルに書き出す (普段の git は Infisical なしで動く)。
 # 未ログインだと export がログインの入力を待つので、標準入力を閉じてすぐ失敗させる (出力はメモリで受け取る)
 function Export-Secrets {
     $psi = New-Object Diagnostics.ProcessStartInfo $pwsh, ("$tools infisical export --domain https://il.doany.io/api " +
@@ -96,11 +95,11 @@ if (-not $exported) {
 }
 $secrets = @{}
 foreach ($s in ($exported | Out-String | ConvertFrom-Json)) { $secrets[$s.key] = $s.value }
-foreach ($e in @{ SSH_MAIN_PEM = "$sshDir\main.pem"; GIT_CREDENTIALS = "$HOME\.git-credentials" }.GetEnumerator()) {
+foreach ($e in @{ GIT_CREDENTIALS = "$HOME\.git-credentials" }.GetEnumerator()) {
     if (-not $secrets[$e.Key]) { throw "infisical: $($e.Key) がない" }
     if (Test-Path $e.Value) { icacls $e.Value /grant:r "${env:USERNAME}:(F)" | Out-Null }
     [IO.File]::WriteAllText($e.Value, ($secrets[$e.Key].TrimEnd() -replace "`r`n", "`n") + "`n")
-    # 本人だけ読める (chmod 600 相当)。Windows の OpenSSH はこうしないと鍵を拒否する
+    # 本人だけ読める (chmod 600 相当)
     icacls $e.Value /inheritance:r /grant:r "${env:USERNAME}:(R,W)" | Out-Null
 }
 # fj (forgejo-cli) も GIT_CREDENTIALS のトークンでログインする。GIT_CREDENTIALS は Forgejo のホスト
