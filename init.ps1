@@ -68,36 +68,30 @@ if (-not (Test-Path 'C:\DevDrive\DevDrive.vhdx')) {
 }
 $dev = (Get-Volume -FileSystemLabel DevDrive).DriveLetter
 
-# danything/gitops。infisical などの運用のコマンドは、手元に入れずに gitops の tools (wslc のコンテナ) で動かす
+# danything/gitops。sops などの運用のコマンドは、手元に入れずに gitops の tools (wslc のコンテナ) で動かす
 $gitops = "${dev}:\danything\gitops"
 if (-not (Test-Path "$gitops\.git")) { gh repo clone danything/gitops $gitops }
-$tools = "-NoProfile -ExecutionPolicy Bypass -File `"$gitops\tools\t.ps1`""
 
-# シークレットは Infisical から取り出してファイルに書き出す (普段の git は Infisical なしで動く)。
-# 未ログインだと export がログインの入力を待つので、標準入力を閉じてすぐ失敗させる (出力はメモリで受け取る)
-function Export-Secrets {
-    $psi = New-Object Diagnostics.ProcessStartInfo $pwsh, ("$tools infisical export --domain https://il.doany.io/api " +
-        '--projectId b3ee533f-5b9e-4fdf-8c44-109926b78f20 --env prod --path /dotfiles --silent --format json')
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $p = [Diagnostics.Process]::Start($psi)
-    $p.StandardInput.Close()
-    $out = $p.StandardOutput.ReadToEnd()
-    $p.WaitForExit()
-    if ($p.ExitCode -eq 0) { $out }
+# シークレットはこのリポジトリの secrets.sops.yaml (SOPS。gitops の管理者の age の鍵で暗号化) から取り出してファイルに書き出す。
+# 鍵が gitops の .home に無ければ recovery/sops-age.key.age をパスフレーズで開いて置き、取り出したら消す
+# (置いてあった鍵は残す)。復号した中身はメモリで受け取る
+$key = "$gitops\.home\.config\sops\age\keys.txt"
+$placed = -not (Test-Path $key)
+if ($placed) {
+    & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sh -c 'mkdir -p ~/.config/sops/age && age -d -o ~/.config/sops/age/keys.txt recovery/sops-age.key.age'
+    if ($LASTEXITCODE -ne 0) { throw 'age: recovery/sops-age.key.age を開けない' }
 }
-$exported = Export-Secrets
-if (-not $exported) {
-    # ブラウザのログインはコンテナに戻ってこられないので、ブラウザに出るトークンを貼り付ける
-    & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" infisical login --domain https://il.doany.io/api
-    $exported = Export-Secrets
-    if (-not $exported) { throw 'infisical: シークレットを取得できない' }
+try {
+    $exported = Get-Content -Raw "$dotfiles\secrets.sops.yaml" |
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sops -d --input-type yaml --output-type json /dev/stdin
+    if ($LASTEXITCODE -ne 0) { throw 'sops: secrets.sops.yaml を開けない' }
+} finally {
+    if ($placed) { Remove-Item $key -ErrorAction SilentlyContinue }
 }
 $secrets = @{}
-foreach ($s in ($exported | Out-String | ConvertFrom-Json)) { $secrets[$s.key] = $s.value }
+foreach ($s in ($exported | Out-String | ConvertFrom-Json).PSObject.Properties) { $secrets[$s.Name] = $s.Value }
 foreach ($e in @{ GIT_CREDENTIALS = "$HOME\.git-credentials" }.GetEnumerator()) {
-    if (-not $secrets[$e.Key]) { throw "infisical: $($e.Key) がない" }
+    if (-not $secrets[$e.Key]) { throw "sops: secrets.sops.yaml に $($e.Key) がない" }
     if (Test-Path $e.Value) { icacls $e.Value /grant:r "${env:USERNAME}:(F)" | Out-Null }
     [IO.File]::WriteAllText($e.Value, ($secrets[$e.Key].TrimEnd() -replace "`r`n", "`n") + "`n")
     # 本人だけ読める (chmod 600 相当)

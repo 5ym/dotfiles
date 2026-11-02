@@ -22,16 +22,23 @@ gh api repos/5ym/dotfiles/contents/init.ps1 -H 'Accept: application/vnd.github.r
 - `~/dotfiles` に clone し、`~/.gitconfig` からこのリポジトリの設定を読む
 - Dev Drive がなければ UAC を出して作る (`devdrive.ps1`、50GB。clone 先は `<ドライブ>:\<org>\<repo>`)
 - [danything/gitops](https://github.com/danything/gitops) を `<Dev Drive>:\danything\gitops` に clone する。
-  infisical などの運用のコマンドは手元に入れず、その `tools/t.ps1` (wslc のコンテナ) で動かす
-- Infisical (https://il.doany.io の `/dotfiles`、prod) の `GIT_CREDENTIALS` を `~/.git-credentials` に書き出す。
-  未ログインならブラウザでログインする (ログイン情報は gitops の `.home/`)
+  sops などの運用のコマンドは手元に入れず、その `tools/t.ps1` (wslc のコンテナ) で動かす
+- このリポジトリの `secrets.sops.yaml`(SOPS。gitops の管理者の age の鍵で暗号化)の `GIT_CREDENTIALS` を `~/.git-credentials` に書き出す。
+  鍵が gitops の `.home/` に無ければ、gitops の `recovery/sops-age.key.age` のパスフレーズを聞く (取り出したら鍵は消す)
 - PowerShell 5.1 / 7 のプロファイル、FiraCode Nerd Font、Windows Terminal (`terminal/settings.json` の項目だけ上書き)
 
 上書きするプロファイルと Terminal の設定は `.bak` に残す。
 
 ## シークレット
 
-リポジトリには置かず、Infisical の `/dotfiles` に置く。作り直したら Infisical の値を差し替えて、各端末で `init.ps1` を実行し直す。
+`secrets.sops.yaml` に SOPS で暗号化して置く (gitops の管理者の age の鍵だけで開ける)。
+sops は gitops の `tools/t.ps1` の中で動かす。gitops の外のファイルなので標準入力で渡す。作り直したら次のように差し替えて、各端末で `init.ps1` を実行し直す:
+
+```powershell
+Get-Content -Raw secrets.sops.yaml | <gitops>\tools\t.ps1 sops -d --input-type yaml --output-type yaml /dev/stdin   # 今の中身を見る
+# 暗号化は gitops の .sops.yaml の規則に当たらないので、コンテナの中で gitops の外 (/tmp) に移ってから --age で
+<新しい YAML> | <gitops>\tools\t.ps1 sh -c 'cd /tmp && sops -e --age age1sgnnkn67wpt4wgjsff4c36w3cmjkk557ng504e4aczx2lzls9y6ssy0x9r --input-type yaml --output-type yaml /dev/stdin' | Set-Content -Encoding utf8 secrets.sops.yaml
+```
 `GIT_CREDENTIALS` は GitHub 以外の Git サーバー (fj.doany.io、code.ffmpeg.org) 用で、`https://<ユーザー>:<トークン>@<ホスト>` を 1 行ずつ書く。
 
 fj (forgejo-cli) も `GIT_CREDENTIALS` の各行のトークンで、ホストごとに `init.ps1` がログインする
