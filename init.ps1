@@ -77,11 +77,12 @@ if (-not (Test-Path "$gitops\.git")) { gh repo clone danything/gitops $gitops }
 # (置いてあった鍵は残す)。復号した中身はメモリで受け取る
 $key = "$gitops\.home\.config\sops\age\keys.txt"
 $placed = -not (Test-Path $key)
-if ($placed) {
-    & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sh -c 'mkdir -p ~/.config/sops/age && age -d -o ~/.config/sops/age/keys.txt recovery/sops-age.key.age'
-    if ($LASTEXITCODE -ne 0) { throw 'age: recovery/sops-age.key.age を開けない' }
-}
+# 鍵を置くところから try に入れる (開けずに途中で止まったときも、書きかけの鍵を残さない)
 try {
+    if ($placed) {
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sh -c 'mkdir -p ~/.config/sops/age && age -d -o ~/.config/sops/age/keys.txt recovery/sops-age.key.age'
+        if ($LASTEXITCODE -ne 0) { throw 'age: recovery/sops-age.key.age を開けない' }
+    }
     $exported = Get-Content -Raw "$dotfiles\secrets.sops.yaml" |
         & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sops -d --input-type yaml --output-type json /dev/stdin
     if ($LASTEXITCODE -ne 0) { throw 'sops: secrets.sops.yaml を開けない' }
