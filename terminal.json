@@ -7,8 +7,6 @@
             "font": {
                 "face": "FiraCode Nerd Font Mono"
             },
-            "opacity": 100,
-            "useAcrylic": false,
             "adjustIndistinguishableColors": "always"
         }
     },

@@ -5,11 +5,6 @@ $ProgressPreference = 'SilentlyContinue'
 
 $dotfiles = Join-Path $HOME 'dotfiles'
 
-function Update-SessionPath {
-    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-                [Environment]::GetEnvironmentVariable('Path', 'User')
-}
-
 # zip をダウンロードして sha256 を照合し、展開したディレクトリを返す
 function Expand-VerifiedZip($url, $sha256) {
     $zip = Join-Path $env:TEMP (Split-Path $url -Leaf)
@@ -41,22 +36,16 @@ if (-not ((Test-Path "$fjDir\fj.exe") -and ((& "$fjDir\fj.exe" version 2>$null) 
 }
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if (($userPath -split ';') -notcontains $fjDir) {
-    [Environment]::SetEnvironmentVariable('Path', "$userPath;$fjDir", 'User')
+    $userPath = "$userPath;$fjDir"
+    [Environment]::SetEnvironmentVariable('Path', $userPath, 'User')
 }
-Update-SessionPath
+# winget と上で入れたものを、このセッションでも使えるようにする
+$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + $userPath
 
 # リポジトリと Git
 if (-not (Test-Path "$dotfiles\.git")) { gh repo clone 5ym/dotfiles $dotfiles }
 gh auth setup-git
 git config --global include.path '~/dotfiles/.gitconfig'
-
-# SSH の設定はもう配らない (クラスタが Talos になり、ssh で入るノードが無い)。前に足した Include だけ外す
-$sshConfig = Join-Path $HOME '.ssh\config'
-$include = 'Include ~/dotfiles/.ssh/config'
-if ((Test-Path $sshConfig) -and @(Get-Content $sshConfig) -contains $include) {
-    # 残りが空でも書き出す (パイプに何も流れないと Set-Content はファイルに触らない)
-    Set-Content $sshConfig -Value @(@(Get-Content $sshConfig) | Where-Object { $_ -ne $include }) -Encoding ascii
-}
 
 # Dev Drive。作成には管理者権限が要るので、ないときだけ UAC を出す。
 # 5.1 は BOM なし UTF-8 のスクリプトを Shift_JIS として読むので pwsh で実行する
@@ -71,6 +60,7 @@ $dev = (Get-Volume -FileSystemLabel DevDrive).DriveLetter
 # danything/gitops。sops などの運用のコマンドは、手元に入れずに gitops の tools (wslc のコンテナ) で動かす
 $gitops = "${dev}:\danything\gitops"
 if (-not (Test-Path "$gitops\.git")) { gh repo clone danything/gitops $gitops }
+$t = '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$gitops\tools\t.ps1"
 
 # シークレットはこのリポジトリの secrets.sops.yaml (SOPS。gitops の管理者の age の鍵で暗号化) から取り出してファイルに書き出す。
 # 鍵が gitops の .home に無ければ recovery/sops-age.key.age をパスフレーズで開いて置き、取り出したら消す
@@ -80,44 +70,44 @@ $placed = -not (Test-Path $key)
 # 鍵を置くところから try に入れる (開けずに途中で止まったときも、書きかけの鍵を残さない)
 try {
     if ($placed) {
-        & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sh -c 'mkdir -p ~/.config/sops/age && age -d -o ~/.config/sops/age/keys.txt recovery/sops-age.key.age'
+        & $pwsh @t sh -c 'mkdir -p ~/.config/sops/age && age -d -o ~/.config/sops/age/keys.txt recovery/sops-age.key.age'
         if ($LASTEXITCODE -ne 0) { throw 'age: recovery/sops-age.key.age を開けない' }
     }
     $exported = Get-Content -Raw "$dotfiles\secrets.sops.yaml" |
-        & $pwsh -NoProfile -ExecutionPolicy Bypass -File "$gitops\tools\t.ps1" sops -d --input-type yaml --output-type json /dev/stdin
+        & $pwsh @t sops -d --input-type yaml --output-type json /dev/stdin
     if ($LASTEXITCODE -ne 0) { throw 'sops: secrets.sops.yaml を開けない' }
 } finally {
     if ($placed) { Remove-Item $key -ErrorAction SilentlyContinue }
 }
-$secrets = @{}
-foreach ($s in ($exported | Out-String | ConvertFrom-Json).PSObject.Properties) { $secrets[$s.Name] = $s.Value }
-foreach ($e in @{ GIT_CREDENTIALS = "$HOME\.git-credentials" }.GetEnumerator()) {
-    if (-not $secrets[$e.Key]) { throw "sops: secrets.sops.yaml に $($e.Key) がない" }
-    if (Test-Path $e.Value) { icacls $e.Value /grant:r "${env:USERNAME}:(F)" | Out-Null }
-    [IO.File]::WriteAllText($e.Value, ($secrets[$e.Key].TrimEnd() -replace "`r`n", "`n") + "`n")
-    # 本人だけ読める (chmod 600 相当)
-    icacls $e.Value /inheritance:r /grant:r "${env:USERNAME}:(R,W)" | Out-Null
-}
+$cred = ($exported | Out-String | ConvertFrom-Json).GIT_CREDENTIALS
+if (-not $cred) { throw 'sops: secrets.sops.yaml に GIT_CREDENTIALS がない' }
+$credFile = "$HOME\.git-credentials"
+if (Test-Path $credFile) { icacls $credFile /grant:r "${env:USERNAME}:(F)" | Out-Null }
+[IO.File]::WriteAllText($credFile, ($cred.TrimEnd() -replace "`r`n", "`n") + "`n")
+# 本人だけ読める (chmod 600 相当)
+icacls $credFile /inheritance:r /grant:r "${env:USERNAME}:(R,W)" | Out-Null
 # fj (forgejo-cli) も GIT_CREDENTIALS のトークンでログインする。GIT_CREDENTIALS は Forgejo のホスト
 # (fj.doany.io、code.ffmpeg.org) だけなので、全行を登録する (fj の auth login は自前の
 # インスタンスでは使えない)。トークンは標準入力で渡す (引数だとプロセス一覧に出る)。
 # 登録済みのホストは何もしない (whoami は read:user の権限が要るので、fj の keys.json で見る)
 $fjKeys = Join-Path $env:APPDATA 'forgejo-cli\forgejo-cli\data\keys.json'
 $fjHosts = if (Test-Path $fjKeys) { (Get-Content $fjKeys -Raw | ConvertFrom-Json).hosts } else { $null }
-foreach ($fjLine in ($secrets['GIT_CREDENTIALS'] -split "`r?`n") | Where-Object { $_ -match '^https://[^:/]+:[^@]+@[^/]+/?$' }) {
-    $fjUri = [Uri]$fjLine
-    if ($fjHosts -and $fjHosts.($fjUri.Host)) { continue }
-    [Uri]::UnescapeDataString($fjUri.UserInfo.Split(':', 2)[1]) | & "$fjDir\fj.exe" -H $fjUri.Host auth add-token | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Warning "fj: $($fjUri.Host) のトークンを登録できなかった" }
+foreach ($line in ($cred -split "`r?`n") | Where-Object { $_ -match '^https://[^:/]+:[^@]+@[^/]+/?$' }) {
+    $uri = [Uri]$line
+    if ($fjHosts -and $fjHosts.($uri.Host)) { continue }
+    [Uri]::UnescapeDataString($uri.UserInfo.Split(':', 2)[1]) | & "$fjDir\fj.exe" -H $uri.Host auth add-token | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "fj: $($uri.Host) のトークンを登録できなかった" }
 }
-Remove-Variable exported, secrets, fjKeys, fjHosts, fjLine, fjUri -ErrorAction SilentlyContinue
+Remove-Variable exported, cred, line, uri -ErrorAction SilentlyContinue
 
-# PowerShell プロファイル。5.1 と 7 の両方から dotfiles のものを読む
-$loader = '. (Join-Path $HOME ''dotfiles\powershell\profile.ps1'')'
+# PowerShell プロファイル。5.1 と 7 の両方から dotfiles のものを読む。前のプロファイルが dotfiles を読む行でなければ .bak に残す。
+# ファイルを直接 dot-source しない。5.1 は BOM なし UTF-8 を Shift_JIS として読み、日本語で終わるコメントの次の行まで
+# コメントになって構文エラーになる
+$loader = '. ([scriptblock]::Create([IO.File]::ReadAllText("$HOME\dotfiles\profile.ps1")))'
 foreach ($dir in 'WindowsPowerShell', 'PowerShell') {
     $p = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "$dir\Microsoft.PowerShell_profile.ps1"
     New-Item -ItemType Directory -Force (Split-Path $p) | Out-Null
-    if ((Test-Path $p) -and (Get-Content $p -Raw) -notmatch [regex]::Escape($loader)) { Copy-Item $p "$p.bak" -Force }
+    if ((Test-Path $p) -and (Get-Content $p -Raw) -notmatch 'dotfiles.*profile\.ps1') { Copy-Item $p "$p.bak" -Force }
     Set-Content $p $loader -Encoding ascii
 }
 # 既定の Restricted ではプロファイルを読めない。上位のスコープに設定があると警告のエラーになるので続ける
@@ -146,7 +136,7 @@ if (-not (Test-Path "$fontDir\FiraCodeNerdFontMono-Regular.ttf")) {
     Remove-Item $d -Recurse
 }
 
-# Windows Terminal。settings.json は UI も書き込むので、terminal/settings.json の項目だけ上書きする
+# Windows Terminal。settings.json は UI も書き込むので、terminal.json の項目だけ上書きする
 $wt = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
 if (Test-Path $wt) {
     function Merge-Json($base, $overlay) {
@@ -157,7 +147,7 @@ if (Test-Path $wt) {
         }
     }
     $settings = Get-Content $wt -Raw -Encoding UTF8 | ConvertFrom-Json
-    Merge-Json $settings (Get-Content "$dotfiles\terminal\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json)
+    Merge-Json $settings (Get-Content "$dotfiles\terminal.json" -Raw -Encoding UTF8 | ConvertFrom-Json)
     Copy-Item $wt "$wt.bak" -Force
     # WriteAllText は BOM なし UTF-8 (5.1 の Set-Content -Encoding utf8 は BOM を付ける)
     [IO.File]::WriteAllText($wt, ($settings | ConvertTo-Json -Depth 32))
